@@ -1,26 +1,24 @@
 # Iyad Ahmed 2021 -
 # AVR Emulator for Fun
 
-
-def gb(value: int, offset: int) -> int:
-    mask = 1 << offset
-    return (value & mask)
+from ctypes import c_int8
 
 
-def sb(value: int, offset: int) -> int:
-    mask = 1 << offset
-    return (value | mask)
+class Register:
+    def __init__(self):
+        self.value = c_int8(0)
 
+    def set_value(self, value):
+        self.value = c_int8(value)
 
-def alu(fn: callable) -> callable:
-    ''' Decorator for ALU and Logic opcodes '''
+    def __getitem__(self, key):
+        return self.value & (1 << key)
 
-    def op(self, Rd, Rr):
-        Rdv = self.REG[Rd]
-        Rrv = self.REG[Rr]
-        self.REG[Rd] = fn(self, Rdv, Rrv)
-
-    return op
+    def __setitem__(self, key, value):
+        if value:
+            self.value = c_int8(self.value | (1 << key))
+        else:
+            self.value = c_int8(self.value & ~(1 << key))
 
 
 class ATmega328P:
@@ -38,30 +36,39 @@ class ATmega328P:
         self.T = 0               # Transfer bit used by BLD and BST instructions
         self.I = 0               # Global Interrupt Enable/Disable Flag
 
-        self.REG = [0] * 32
+        self.REG = [Register()] * 32
         self.STACK = []
         self.ROM = []
         self.RAM = []
 
-    @alu
-    def ADC(self, Rd, Rr):
+    def ADD(self, Rd, Rr):
         assert 0 <= Rd <= 31
         assert 0 <= Rr <= 31
+        Rdv = self.REG[Rd]
+        Rrv = self.REG[Rr]
+        Rv = Rdv + Rrv
+        self.REG[Rd] = Rv
+
+        Rdv3 = get_bit(Rdv, 3)
+        Rrv3 = get_bit(Rrv, 3)
+        Rv3 = get_bit(Rv, 3)
+        self.H = Rdv3 & Rrv3 + Rrv3 & ~Rv3 + ~Rv3 & Rdv3    # Set if there was a carry from bit 3; cleared otherwise.
+
+        Rdv7 = get_bit(Rdv, 7)
+        Rrv7 = get_bit(Rrv, 7)
+        Rv7 = get_bit(Rv, 7)
+        self.V = R >   # Set if two’s complement overflow resulted from the operation; cleared otherwise.
+
+        self.N = Rv7
+        self.S = self.N ^ self.V
+        
+
+    def ADC(self, Rd, Rr):
         R = Rd + Rr + self.C
-        return R
-        self.H = (gb(Rd, 3) & gb(Rr, 3)) + \
-                 (gb(Rr, 3) & (~gb(R, 3))) + \
-                 ((~gb(R, 3)) & gb(Rd, 3))
-
-        self.V = (gb(Rd, 7) & gb(Rr, 7) & (~gb(R, 7))) + \
-                 ((~gb(Rd, 7)) & (~gb(Rr, 7)) & gb(R, 7))
-
-    def ADD(self, Rd, Rr):
-        R = Rdv + Rrv
         return R
 
 
 avr = ATmega328P()
-avr.REG[1] = 1
-avr.ADC(0, 1)
+avr.REG[1] = 5
+avr.ADD(0, 1)
 print(avr.REG[0])
